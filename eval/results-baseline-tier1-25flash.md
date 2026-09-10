@@ -1,0 +1,24 @@
+# Plantie — Ölçüm Sonuçları
+
+Veri seti: 36 görsel, GBIF CC0, uzman-doğrulamalı tür adları.
+Koşu: 2026-09-10T09:47:39.564Z
+
+| Yol | top-1 (binomial) | top-1 (cins) | top-3 | p50 gecikme | p95 gecikme | maliyet/tanımlama |
+|---|---|---|---|---|---|---|
+| A · yalnız Pl@ntNet | 63.9% | 86.1% | 72.2% | 761ms | 2216ms | $0.00100 |
+| B · yalnız VLM | 22.2% | 38.9% | 27.8% | 1577ms | 2471ms | $0.00059 |
+| C · hibrit (Tier-1) | 58.3% | 75.0% | 72.2% | 2372ms | 3780ms | $0.00165 |
+| D · kademeli (Tier-2 hakemli) | 63.9% | 86.1% | 72.2% | 2630ms | 4950ms | $0.00184 |
+| E · muhafazakâr hibrit | 63.9% | 83.3% | 72.2% | 2372ms | 3780ms | $0.00165 |
+| F · muhafazakâr + çöp-aday kurtarma | 63.9% | 83.3% | 72.2% | 2372ms | 3780ms | $0.00165 |
+
+## Kademeleme davranışı
+
+- Tier-2'ye yükselen tanımlama: **10/36** (27.8%)
+- Tier-2'nin Tier-1'in hatasını düzelttiği vaka: **2**
+- Tier-1 JSON parse hatası: **0/36**
+
+Tetikleyici dağılımı:
+
+- `low-score-but-vlm-confident`: 5
+- `vlm-rejected-all-candidates`: 5

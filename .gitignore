@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+
+# expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# native
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# secrets
+.env
+.env.local
+
+# eval — dataset is fetched, not committed
+eval/photos/
+eval/node_modules/
+
+# metro
+.metro-health-check*
+
+# logs
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# os
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/
+
+# eval — üretilen çıktılar ve indirilen görseller
+eval/results-raw.json
+eval/dataset.full.csv

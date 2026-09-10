@@ -1,0 +1,14 @@
+{
+  "name": "plantie-eval",
+  "private": true,
+  "type": "module",
+  "description": "Uygulamadan bagimsiz olcum seti. App bundle'ina DAHIL DEGILDIR.",
+  "scripts": {
+    "fetch": "node fetch-dataset.mjs",
+    "run": "node --experimental-strip-types run.mjs",
+    "chat-guardrails": "node --experimental-strip-types chat-guardrails.mjs"
+  },
+  "dependencies": {
+    "sharp": "^0.35.4"
+  }
+}

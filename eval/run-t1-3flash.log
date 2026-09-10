@@ -1,0 +1,30 @@
+36 görsel değerlendiriliyor…
+
+  1/36  kota:443            2/36  kota:442  kademelendi  3/36  kota:441            4/36  kota:440            5/36  kota:439  kademelendi  6/36  kota:438            7/36  kota:437            8/36  kota:436  kademelendi  9/36  kota:435  kademelendi  10/36  kota:434            11/36  kota:433            12/36  kota:432            13/36  kota:431            14/36  kota:430            15/36  kota:?  kademelendi  16/36  kota:428            17/36  kota:427            18/36  kota:426            19/36  kota:425            20/36  kota:424            21/36  kota:423            22/36  kota:422            23/36  kota:421            24/36  kota:420            25/36  kota:419            26/36  kota:418            27/36  kota:416            28/36  kota:415            29/36  kota:414            30/36  kota:413            31/36  kota:412  kademelendi  32/36  kota:411            33/36  kota:410            34/36  kota:409  kademelendi  35/36  kota:408            36/36  kota:407          
+
+# Plantie — Ölçüm Sonuçları
+
+Veri seti: 36 görsel, GBIF CC0, uzman-doğrulamalı tür adları.
+Koşu: 2026-09-10T15:40:37.842Z
+
+| Yol | top-1 (binomial) | top-1 (cins) | top-3 | p50 gecikme | p95 gecikme | maliyet/tanımlama |
+|---|---|---|---|---|---|---|
+| A · yalnız Pl@ntNet | 63.9% | 86.1% | 72.2% | 710ms | 1648ms | $0.00100 |
+| B · yalnız VLM | 47.2% | 75.0% | 58.3% | 2415ms | 12393ms | $0.00050 |
+| C · hibrit (Tier-1) | 66.7% | 83.3% | 72.2% | 3214ms | 13328ms | $0.00154 |
+| D · kademeli (Tier-2 hakemli) | 66.7% | 83.3% | 72.2% | 3365ms | 16533ms | $0.00165 |
+| E · muhafazakâr hibrit | 63.9% | 86.1% | 72.2% | 3214ms | 13328ms | $0.00154 |
+| F · muhafazakâr + çöp-aday kurtarma | 63.9% | 86.1% | 72.2% | 3214ms | 13328ms | $0.00154 |
+
+## Kademeleme davranışı
+
+- Tier-2'ye yükselen tanımlama: **7/36** (19.4%)
+- Tier-2'nin Tier-1'in hatasını düzelttiği vaka: **0**
+- Tier-1 JSON parse hatası: **0/36**
+
+Tetikleyici dağılımı:
+
+- `low-score-but-vlm-confident`: 5
+- `vlm-rejected-all-candidates`: 2
+
+→ eval/results.md ve eval/results.csv yazıldı.
