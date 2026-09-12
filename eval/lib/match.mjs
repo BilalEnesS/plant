@@ -1,18 +1,20 @@
 /**
- * Tür adı eşleştirme — ölçümün en kritik ve en kolay yanlış yapılan parçası.
+ * Species-name matching — the most critical and most easily botched part of
+ * the measurement.
  *
- * Kaynaklar farklı biçimlerde ad döndürüyor:
- *   GBIF (doğru cevap) : "Sonchus oleraceus"
- *   Pl@ntNet           : "Sonchus oleraceus"      (scientificNameWithoutAuthor)
- *   VLM                : "Sonchus oleraceus L."   ya da "Sonchus asper" (yakın tür)
+ * The sources return names in different shapes:
+ *   GBIF (ground truth) : "Sonchus oleraceus"
+ *   Pl@ntNet            : "Sonchus oleraceus"      (scientificNameWithoutAuthor)
+ *   VLM                 : "Sonchus oleraceus L."   or "Sonchus asper" (a near species)
  *
- * Bu yüzden iki seviyede puanlıyoruz ve İKİSİNİ DE raporluyoruz:
- *   - binomial : cins + tür tam eşleşmeli (katı, asıl metrik)
- *   - genus    : yalnızca cins eşleşsin (kısmi kredi)
+ * So scoring happens at two levels and BOTH are reported:
+ *   - binomial : genus + species must match exactly (strict, the headline metric)
+ *   - genus    : genus only (partial credit)
  *
- * Cins seviyesini ayrı raporlamak dürüstlük meselesi: "Rosa gallica" yerine
- * "Rosa canina" demek tamamen yanlış değil ama doğru da değil; tek bir
- * "accuracy" sayısına gömmek okuyucuyu yanıltır.
+ * Reporting the genus level separately is a matter of honesty: saying
+ * "Rosa canina" instead of "Rosa gallica" is not completely wrong, but it is
+ * not right either — burying that in a single "accuracy" number misleads the
+ * reader.
  */
 
 /** "Sonchus oleraceus L." → "sonchus oleraceus" */
@@ -22,7 +24,7 @@ export function normalizeLatin(name) {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
-    // yazar kısaltmaları, alt tür ekleri, parantezli notlar
+    // author abbreviations, infraspecific ranks, parenthesised notes
     .replace(/\b(subsp|ssp|var|f|cv|sp)\.?\s+\S+/g, '')
     .replace(/\([^)]*\)/g, '')
     .replace(/[^a-z\s×]/g, ' ')
@@ -30,7 +32,7 @@ export function normalizeLatin(name) {
     .trim();
 }
 
-/** Normalize edilmiş addan ilk iki kelimeyi (cins + tür) alır. */
+/** Takes the first two words (genus + species) from a normalised name. */
 export function binomialOf(name) {
   const parts = normalizeLatin(name).split(' ').filter(Boolean);
   if (parts.length === 0) return '';
@@ -53,7 +55,7 @@ export function genusMatch(predicted, truth) {
   return p !== '' && p === t;
 }
 
-/** Adaylar listesinde ilk N içinde doğru var mı (top-k). */
+/** Is the truth among the first N predictions (top-k)? */
 export function topKMatch(predictions, truth, k, matcher = binomialMatch) {
   return predictions.slice(0, k).some((p) => matcher(p, truth));
 }

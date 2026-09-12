@@ -10,6 +10,9 @@ import { CandidateList } from '@/ui/CandidateList';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/layout';
 import { useSessionStore } from '@/store/useSessionStore';
+import { useCollectionStore } from '@/store/useCollectionStore';
+import { discoveries } from '@/db/discoveries';
+import { stickerQueue } from '@/services/stickerQueue';
 import { useCopy } from '@/copy/useCopy';
 import type { Candidate } from '@/services/types';
 
@@ -22,6 +25,7 @@ export default function ResultScreen() {
   const tr = useCopy();
   const router = useRouter();
   const plant = useSessionStore((s) => s.lastResult);
+  const setLastResult = useSessionStore((s) => s.setLastResult);
 
   const [primary, setPrimary] = useState<Candidate | null>(
     plant
@@ -46,10 +50,41 @@ export default function ResultScreen() {
     );
   }
 
+  /**
+   * The user picking an alternative is a real correction, so it has to reach
+   * everything the original species reached — not just this screen.
+   *
+   * The row is ALREADY persisted by the time this screen renders (pipeline.ts
+   * saves before returning 'identified'), so an earlier version that only
+   * called setPrimary() left the SQLite row, the collection, the sticker and
+   * the chat grounding all pointing at the species the user had just
+   * rejected: the header changed and nothing else did.
+   *
+   * The sticker is re-queued because it is keyed by species. `stickerTraits`
+   * are reused deliberately — they describe the photo, which has not changed.
+   */
   function handleSwap(candidate: Candidate) {
-    if (!primary) return;
-    setAlternatives((prev) => [primary, ...prev.filter((c) => c.latin !== candidate.latin)]);
+    // Re-checked rather than relying on the guard above: TypeScript does not
+    // carry that narrowing into this closure.
+    if (!primary || !plant) return;
+    const record = plant;
+    const previous = primary;
+    const common = candidate.commonNames[0] ?? null;
+
+    setAlternatives((prev) => [previous, ...prev.filter((c) => c.latin !== candidate.latin)]);
     setPrimary(candidate);
+
+    // Keep the session copy in step, so navigating to the chat from here
+    // grounds it in the species now on screen.
+    setLastResult({ ...record, speciesLatin: candidate.latin, speciesCommonTr: common });
+
+    void (async () => {
+      await discoveries.setSpecies(record.id, candidate.latin, common);
+      if (record.stickerTraits) {
+        stickerQueue.retry(record.id, candidate.latin, record.stickerTraits);
+      }
+      await useCollectionStore.getState().refresh();
+    })();
   }
 
   // The name is shown plainly. The hedge lives in ConfidenceIndicator alone —

@@ -1,37 +1,36 @@
 /**
- * Maliyet modeli — tanımlama başına birim ekonomi.
+ * Cost model — unit economics per identification.
  *
- * Tüketici tarayıcı uygulamasında birim maliyet ürün kararıdır: aylık
- * milyonlarca tarama yapan bir üründe tanımlama başına birkaç kuruş,
- * doğrudan marjı belirler. Bu yüzden ölçümün maliyet ayağı doğruluk kadar
- * önemli.
+ * In a consumer scanner app the unit cost IS a product decision: at millions
+ * of scans a month, a fraction of a cent per identification sets the margin.
+ * That is why the cost axis of this measurement matters as much as accuracy.
  *
- * Fiyatlar 2026-09 itibarıyla halka açık liste fiyatları (USD / 1M token).
- * EachLabs router sağlayıcı fiyatını yansıtıyor; kesin fatura farklı olabilir,
- * bu yüzden rakamlar MERTEBE karşılaştırması için — yollar arası ORAN anlamlı,
- * mutlak değer yaklaşık.
+ * Prices are public list prices as of 2026-09 (USD / 1M tokens). The EachLabs
+ * router reflects the provider's price, and the actual invoice may differ — so
+ * these numbers are for ORDER-OF-MAGNITUDE comparison: the RATIO between paths
+ * is meaningful, the absolute value is approximate.
  */
 export const PRICING = {
   'gemini-2.5-flash': { inPer1M: 0.3, outPer1M: 2.5 },
   'claude-sonnet-4.5': { inPer1M: 3.0, outPer1M: 15.0 },
-  // Bir REASONING modeli: düşünme token'ları completion'a sayılıyor, yani
-  // çıktı tarafı görünen yanıttan çok daha pahalı (ölçüm: 884-1232 completion
-  // token, Sonnet'te 278). Tier 2 olarak DENENDİ ve elendi — bkz.
-  // eval/results-tier2-bakeoff.md. Fiyat satırı karşılaştırma için duruyor.
+  // A REASONING model: thinking tokens count toward completion, so the output
+  // side is far more expensive than the visible answer (measured: 884-1232
+  // completion tokens vs. 278 for Sonnet). TRIED as Tier 2 and rejected — see
+  // eval/results-tier2-bakeoff.md. The price line stays for comparison.
   'gemini-2.5-pro': { inPer1M: 1.25, outPer1M: 10.0 },
-  // Tier 2 (mevcut). DİKKAT: bu preview modelin liste fiyatı doğrulanmadı;
-  // buradaki değer 2.5-flash'a eşit varsayıldı, yani maliyet tablosundaki
-  // Tier-2 kalemi ALT SINIR olarak okunmalı. Faturalandırma teyit edilince
-  // güncellenmeli.
+  // Tier 2 (current). CAUTION: this preview model's list price is unverified;
+  // the value here assumes parity with 2.5-flash, so the Tier-2 line in the
+  // cost table should be read as a LOWER BOUND. Update once billing is
+  // confirmed.
   'gemini-3-flash-preview': { inPer1M: 0.3, outPer1M: 2.5 },
 };
 
-/** Pl@ntNet ücretsiz katman: 500 istek/gün, ticari olmayan kullanım. */
+/** Pl@ntNet free tier: 500 requests/day, non-commercial use. */
 export const PLANTNET_FREE_TIER_PER_DAY = 500;
 /**
- * Ücretli katmanda tanımlama başına yaklaşık maliyet. Ücretsiz katmanda 0,
- * ama "ölçekte ne olur" sorusunun cevabı için sıfır kabul etmek yanıltıcı;
- * bu yüzden README'de her iki senaryo da veriliyor.
+ * Approximate cost per identification on the paid tier. It is 0 on the free
+ * tier, but treating it as zero would misrepresent "what happens at scale" —
+ * so the README gives both scenarios.
  */
 export const PLANTNET_PAID_PER_CALL = 0.001;
 

@@ -18,10 +18,10 @@ function readEnv(): Env {
 
   if (__DEV__) {
     if (!plantnetApiKey) {
-      console.warn('[env] PLANTNET_API_KEY tanımlı değil — .env dosyasını kontrol et.');
+      console.warn('[env] PLANTNET_API_KEY is not set — check your .env file.');
     }
     if (!eachlabsApiKey) {
-      console.warn('[env] EACHLABS_API_KEY tanımlı değil — .env dosyasını kontrol et.');
+      console.warn('[env] EACHLABS_API_KEY is not set — check your .env file.');
     }
   }
 

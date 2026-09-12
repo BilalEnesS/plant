@@ -1,18 +1,22 @@
 /**
- * Değerlendirme koşucusu — dört yolu aynı veri üzerinde karşılaştırır.
+ * Evaluation runner — compares six paths over the same data.
  *
- *   A  plantnet    Yalnızca uzman sınıflandırıcı (top-1 adayı)
- *   B  vlm         Yalnızca VLM, açık uçlu "bu hangi bitki?" (aday listesi YOK)
- *   C  hybrid      Pl@ntNet + Tier-1 çapraz doğrulama (kademeleme YOK)
- *   D  cascade     C + çelişkide Tier-2 hakem  ← uygulamanın sahaya çıkan hali
+ *   A  plantnet    Specialist classifier only (its top-1 candidate)
+ *   B  vlm         VLM only, open-ended "what plant is this?" (NO candidate list)
+ *   C  hybrid      Pl@ntNet + Tier-1 cross-validation (NO cascade)
+ *   D  cascade     C + a Tier-2 adjudicator on disagreement
+ *   E  conservative  C, but the VLM never re-ranks the species
+ *   F  rescue      E + own-guess rescue when the candidates are unusable  ← shipped
  *
- * TASARIM KARARI — görsel başına her API BİR KEZ çağrılır, dört yol aynı ham
- * yanıtlardan türetilir. Bunun üç faydası var: (1) Pl@ntNet'in 500/gün ücretsiz
- * kotasını korur, (2) yollar arası farkın model varyansından değil MİMARİDEN
- * geldiğini garanti eder, (3) koşuyu hızlandırır.
+ * DESIGN DECISION — every API is called ONCE per image and all six paths are
+ * derived from the same raw responses. Three benefits: (1) it protects
+ * Pl@ntNet's free 500/day quota, (2) it guarantees the difference between
+ * paths comes from the ARCHITECTURE rather than model variance, (3) it makes
+ * the run fast.
  *
- * Güven politikası uygulamanın GERÇEK confidence.ts dosyasından import edilir
- * (kopyalanmaz) — eval ile sahaya çıkan davranışın zamanla sapması imkânsız.
+ * The confidence policy is imported from the app's REAL confidence.ts rather
+ * than copied, so the measured behaviour and the shipped behaviour cannot
+ * drift apart.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,16 +32,33 @@ import {
 import { binomialMatch, genusMatch, topKMatch } from './lib/match.mjs';
 import { llmCost, percentile, PLANTNET_PAID_PER_CALL } from './lib/cost.mjs';
 
-// Uygulamanın gerçek güven politikası (Node --experimental-strip-types ile).
+// The app's real confidence policy (via Node --experimental-strip-types).
 const confidence = await import(
   new URL('../src/services/confidence.ts', import.meta.url).href
 );
 
 /**
- * Uygulamanın GERÇEK prompt'ları. Eskiden bu dosya kendi kopyalarını
- * taşıyordu; bu sessiz bir drift kaynağıydı — app'teki prompt değişince eval
- * hâlâ eskisini ölçüyor ve sayılar sevk edilmeyen bir sistemi anlatıyordu.
- * confidence.ts ile aynı desen: tek kaynak, kopya yok.
+ * The app's REAL escalation policy. It used to be a hand-maintained copy in
+ * this file — pipeline.ts cannot be imported here because it pulls in React
+ * Native — and that copy had already drifted once. The routing logic now
+ * lives in its own dependency-free module that both sides import, so the
+ * measured policy and the shipped policy cannot diverge.
+ */
+const { escalationReason } = await import(
+  new URL('../src/services/escalation.ts', import.meta.url).href
+);
+
+/** Maps a raw Tier-1 JSON response onto the shape escalationReason expects. */
+function escalationSignals(parsed) {
+  if (!parsed) return null;
+  return { isPlant: parsed.is_plant !== false, visualAgreement: parsed.visual_agreement };
+}
+
+/**
+ * The app's REAL prompts. This file used to carry its own copies, which was a
+ * silent source of drift — when a prompt changed in the app the eval kept
+ * measuring the old one, and the numbers described a system that was never
+ * shipped. Same pattern as confidence.ts: one source, no copies.
  */
 const prompts = await import(new URL('../src/services/prompt.ts', import.meta.url).href);
 
@@ -52,28 +73,7 @@ Reply with a single JSON object:
 }
 Do not invent a species to seem helpful. Reply with only that JSON object.`;
 
-/**
- * pipeline.ts'teki escalationReason'ın AYNADAKİ kopyası — sırası ve
- * tetikleyicileri birebir. Import edilemiyor çünkü pipeline.ts React Native
- * modüllerine bağlı; bu yüzden burada elle senkron tutulan TEK mantık bu.
- * (confidence.ts ve prompt.ts import ediliyor, kopya değil.)
- *
- * Önceki hali sapmıştı: `is_plant === false` durumunda kademelemeyi iptal
- * ediyordu (uygulama ise ikinci görüş İSTİYOR) ve uygulamanın ölçümle
- * kaldırdığı `vlm-rejected-all-candidates` tetikleyicisini hâlâ taşıyordu.
- */
-function shouldEscalate(tier1, topScore, hasNoCandidates) {
-  if (!tier1) return 'tier1-unparseable';
-  if (tier1.is_plant === false) return 'tier1-says-not-a-plant';
-  if (hasNoCandidates) return 'no-classifier-candidates';
-  if (topScore >= 0.25 && tier1.visual_agreement === 'low') return 'score-vs-agreement-conflict';
-  if (confidence.bandForScore(topScore) === 'low' && tier1.visual_agreement === 'high') {
-    return 'low-score-but-vlm-confident';
-  }
-  return null;
-}
-
-/** VLM çıktısından nihai tür adını türet (aday seçimi ya da kendi tahmini). */
+/** Derive the final species from a VLM response (a picked candidate, or its own guess). */
 function resolveSpecies(vlm, candidates) {
   if (!vlm) return candidates[0]?.latin ?? null;
   if (vlm.best_match_index === -1) return vlm.own_guess_latin ?? null;
@@ -82,9 +82,9 @@ function resolveSpecies(vlm, candidates) {
 }
 
 /**
- * --replay: API'leri hiç çağırmadan önceki koşunun ham yanıtlarını kullanır.
- * Politika varyantlarını (hangi yol daha iyi?) Pl@ntNet'in 500/gün kotasını
- * yakmadan ve model varyansı işin içine girmeden denemeyi sağlar.
+ * --replay: reuse the previous run's raw responses without calling any API.
+ * Lets policy variants ("which path is better?") be tried without burning
+ * Pl@ntNet's 500/day quota and without model variance entering the picture.
  */
 const REPLAY = process.argv.includes('--replay');
 const RAW_PATH = path.join(import.meta.dirname, 'results-raw.json');
@@ -92,7 +92,7 @@ const RAW_PATH = path.join(import.meta.dirname, 'results-raw.json');
 async function main() {
   if (REPLAY) {
     const raw = JSON.parse(await readFile(RAW_PATH, 'utf8'));
-    console.log(`--replay: ${raw.length} kayıt diskten okundu (API çağrısı yok)\n`);
+    console.log(`--replay: ${raw.length} records read from disk (no API calls)\n`);
     report(raw);
     return;
   }
@@ -108,7 +108,7 @@ async function main() {
       return { filename: cells[0], truth: cells[1] };
     });
 
-  console.log(`${rows.length} görsel değerlendiriliyor…\n`);
+  console.log(`Evaluating ${rows.length} images…\n`);
 
   const records = [];
 
@@ -119,11 +119,11 @@ async function main() {
     try {
       const b64 = await vlmImageBase64(file);
 
-      // --- 1) Pl@ntNet (A, C, D ortak kullanır) ---
+      // --- 1) Pl@ntNet (shared by A, C, D, E, F) ---
       const pn = await callPlantNet(env, file);
       rec.plantnet = pn;
 
-      // --- 2) VLM açık uçlu (yalnızca B) ---
+      // --- 2) Open-ended VLM (B only) ---
       try {
         const r = await chatCompletion(env, {
           model: TIER1_MODEL,
@@ -136,9 +136,10 @@ async function main() {
         rec.errors.push(`openEnded: ${e.message}`);
       }
 
-      // --- 3) VLM çapraz doğrulama Tier-1 (C, D ortak) ---
-      // allowOwnGuess, uygulamadaki koşulun aynısı (pipeline.ts): sınıflandırıcı
-      // pratikte başarısızsa (aday yok VEYA top-1 < %5) VLM'den bağımsız tahmin istenir.
+      // --- 3) Tier-1 cross-validation VLM (shared by C, D, E, F) ---
+      // allowOwnGuess matches the app's condition exactly (pipeline.ts): when
+      // the classifier has practically failed (no candidates OR top-1 < 5%),
+      // an independent guess is requested from the VLM.
       const veryLowScore = pn.candidates.length === 0 || (pn.candidates[0]?.score ?? 0) < 0.05;
       try {
         const r = await chatCompletion(env, {
@@ -151,15 +152,19 @@ async function main() {
         rec.errors.push(`tier1: ${e.message}`);
       }
 
-      // --- 4) Tier-2 hakem (yalnızca D, yalnızca tetiklenirse) ---
+      // --- 4) Tier-2 adjudicator (D onwards, only when a trigger fires) ---
       const topScore = pn.candidates[0]?.score ?? 0;
-      const reason = shouldEscalate(rec.tier1?.parsed ?? null, topScore, pn.candidates.length === 0);
+      const reason = escalationReason(
+        escalationSignals(rec.tier1?.parsed ?? null),
+        confidence.bandForScore(topScore),
+        pn.candidates.length === 0,
+      );
       rec.escalationReason = reason;
       if (reason) {
         try {
           const r = await chatCompletion(env, {
             model: TIER2_MODEL,
-            // Tier 1'in cevabı BİLEREK geçilmiyor — bağımsız ikinci okuma.
+            // Tier 1's answer is DELIBERATELY withheld — an independent second reading.
             prompt: prompts.buildSecondOpinionPrompt(pn.candidates, true, 'tr'),
             imageBase64: b64,
             // Mirrors TIER2_MAX_TOKENS in src/api/eachlabs/llm.ts.
@@ -172,30 +177,30 @@ async function main() {
       }
 
       process.stdout.write(
-        `\r  ${i + 1}/${rows.length}  kota:${pn.remaining ?? '?'}  ${reason ? 'kademelendi' : '        '}`,
+        `\r  ${i + 1}/${rows.length}  quota:${pn.remaining ?? '?'}  ${reason ? 'escalated' : '         '}`,
       );
     } catch (e) {
       rec.errors.push(`fatal: ${e.message}`);
-      console.warn(`\n  ${row.filename} atlandı: ${e.message}`);
+      console.warn(`\n  skipped ${row.filename}: ${e.message}`);
     }
 
     records.push(rec);
   }
 
   console.log('\n');
-  // Ham yanıtları sakla — politika varyantları artık --replay ile bedava denenebilir.
+  // Keep the raw responses — policy variants can now be tried for free via --replay.
   await writeFile(RAW_PATH, JSON.stringify(records, null, 2), 'utf8');
   report(records);
 }
 
 function report(records) {
   const paths = {
-    A_plantnet: { label: 'A · yalnız Pl@ntNet', preds: [], top3: [], lat: [], cost: [] },
-    B_vlm: { label: 'B · yalnız VLM', preds: [], top3: [], lat: [], cost: [] },
-    C_hybrid: { label: 'C · hibrit (Tier-1)', preds: [], top3: [], lat: [], cost: [] },
-    D_cascade: { label: 'D · kademeli (Tier-2 hakemli)', preds: [], top3: [], lat: [], cost: [] },
-    E_conservative: { label: 'E · muhafazakâr hibrit', preds: [], top3: [], lat: [], cost: [] },
-    F_rescue: { label: 'F · muhafazakâr + çöp-aday kurtarma', preds: [], top3: [], lat: [], cost: [] },
+    A_plantnet: { label: 'A · Pl@ntNet only', preds: [], top3: [], lat: [], cost: [] },
+    B_vlm: { label: 'B · VLM only', preds: [], top3: [], lat: [], cost: [] },
+    C_hybrid: { label: 'C · hybrid (Tier-1 re-ranks)', preds: [], top3: [], lat: [], cost: [] },
+    D_cascade: { label: 'D · cascade (Tier-2 adjudicator)', preds: [], top3: [], lat: [], cost: [] },
+    E_conservative: { label: 'E · conservative hybrid', preds: [], top3: [], lat: [], cost: [] },
+    F_rescue: { label: 'F · conservative + junk-candidate rescue', preds: [], top3: [], lat: [], cost: [] },
   };
 
   let escalated = 0;
@@ -213,14 +218,14 @@ function report(records) {
     paths.A_plantnet.lat.push(pnLat);
     paths.A_plantnet.cost.push(pnCost);
 
-    // B — açık uçlu VLM
+    // B — open-ended VLM
     const oe = r.openEnded?.parsed;
     paths.B_vlm.preds.push(oe?.species_latin ?? null);
     paths.B_vlm.top3.push([oe?.species_latin, ...(oe?.alternatives ?? [])].filter(Boolean));
     paths.B_vlm.lat.push(r.openEnded?.latencyMs ?? 0);
     paths.B_vlm.cost.push(llmCost(TIER1_MODEL, r.openEnded?.usage));
 
-    // C — hibrit, Tier-1
+    // C — hybrid, Tier-1
     const t1 = r.tier1?.parsed ?? null;
     if (!t1) tier1ParseFail++;
     paths.C_hybrid.preds.push(resolveSpecies(t1, cands));
@@ -228,7 +233,7 @@ function report(records) {
     paths.C_hybrid.lat.push(pnLat + (r.tier1?.latencyMs ?? 0));
     paths.C_hybrid.cost.push(pnCost + llmCost(TIER1_MODEL, r.tier1?.usage));
 
-    // D — kademeli
+    // D — cascade
     const t2 = r.tier2?.parsed ?? null;
     const finalVlm = t2 ?? t1;
     const dPred = resolveSpecies(finalVlm, cands);
@@ -239,41 +244,42 @@ function report(records) {
       pnCost + llmCost(TIER1_MODEL, r.tier1?.usage) + llmCost(TIER2_MODEL, r.tier2?.usage),
     );
 
-    // E — MUHAFAZAKÂR HİBRİT (ölçümün önerdiği tasarım)
+    // E — CONSERVATIVE HYBRID (the design the measurement argues for)
     //
-    // VLM tür SEÇMEZ. Ölçüm gösterdi ki VLM tek başına %22 doğrulukla tür
-    // seviyesinde zayıf; Pl@ntNet'in top-1'ini ezmesine izin vermek doğruluğu
-    // düşürüyor (3 doğruyu bozdu, 1 yanlışı düzeltti). Bu yüzden burada:
-    //   - Tür ADI her zaman Pl@ntNet top-1'den gelir (aday varsa)
-    //   - VLM yalnızca (a) "bu bitki değil" kapısı, (b) güven bandı düşürme,
-    //     (c) zenginleştirme (bakım/Türkçe ad/sticker özellikleri) için kullanılır
-    //   - Kendi tahminine YALNIZCA Pl@ntNet hiç aday vermediğinde izin verilir
+    // The VLM does NOT pick the species. Measurement showed it is weak at
+    // species level on its own (22%); letting it override Pl@ntNet's top-1
+    // lowers accuracy (it broke 3 correct calls to fix 1). So here:
+    //   - the species NAME always comes from Pl@ntNet's top-1 (when there are candidates)
+    //   - the VLM is used only for (a) the "not a plant" gate, (b) lowering the
+    //     confidence band, (c) enrichment (care text / common name / sticker traits)
+    //   - its own guess is allowed ONLY when Pl@ntNet produced no candidate at all
     const finalForE = t2 ?? t1;
     let ePred;
     if (cands.length > 0) {
-      ePred = cands[0].latin; // uzman sınıflandırıcıya güven
+      ePred = cands[0].latin; // trust the specialist classifier
     } else {
-      ePred = finalForE?.own_guess_latin ?? null; // tek dayanak VLM
+      ePred = finalForE?.own_guess_latin ?? null; // the VLM is the only support
     }
-    // "bitki değil" kapısı korunur — yanlış tür göstermektense hiçbir şey gösterme
+    // The "not a plant" gate is preserved — show nothing rather than a wrong species
     if (finalForE?.is_plant === false) ePred = null;
     paths.E_conservative.preds.push(ePred);
     paths.E_conservative.top3.push(cands.slice(0, 3).map((c) => c.latin));
     paths.E_conservative.lat.push(pnLat + (r.tier1?.latencyMs ?? 0));
     paths.E_conservative.cost.push(pnCost + llmCost(TIER1_MODEL, r.tier1?.usage));
 
-    // F — E + "çöp aday" kurtarma
+    // F — E + "junk candidate" rescue
     //
-    // E'nin kör noktası: "aday var mı?" diye soruyor, "adaylar işe yarar mı?"
-    // diye değil. Pl@ntNet %0.3 skorla iki alakasız tür döndürdüğünde E bunu
-    // "aday var" sayıp VLM'in kendi tahminini ATIYOR — üstelik hattın kendisi
-    // o tahmini az önce açıkça İSTEMİŞ oluyor (allowOwnGuess, skor < %5 iken
-    // true). İstediğini kabul etmemek tutarsız; cihazda bu, doğru bilinen bir
-    // Gazania'nın sonsuz "ikinci fotoğraf" döngüsüne düşmesine yol açtı.
+    // E's blind spot: it asks "are there candidates?" rather than "are the
+    // candidates usable?". When Pl@ntNet returns two unrelated species at
+    // 0.3%, E counts that as "there are candidates" and DISCARDS the VLM's own
+    // guess — even though the pipeline explicitly ASKED for that guess moments
+    // earlier (allowOwnGuess is true below 5%). Requesting an answer and then
+    // refusing it is incoherent; on-device it left a correctly identified
+    // Gazania stuck in an endless "second photo" loop.
     //
-    // F, kurtarmayı yalnızca sınıflandırıcının PRATİKTE BAŞARISIZ olduğu
-    // eşikte (top-1 < %5) açar. Bu, D'nin sınırsız ezmesi değil: %5'in
-    // üstünde tür adı hâlâ DAİMA Pl@ntNet'ten gelir.
+    // F opens the rescue only at the threshold where the classifier has
+    // PRACTICALLY FAILED (top-1 < 5%). This is not D's unbounded override:
+    // above 5% the species name still ALWAYS comes from Pl@ntNet.
     const RESCUE_BELOW = 0.05;
     const topScore = cands[0]?.score ?? 0;
     let fPred;
@@ -289,7 +295,7 @@ function report(records) {
     paths.F_rescue.cost.push(pnCost + llmCost(TIER1_MODEL, r.tier1?.usage));
 
     if (r.escalationReason) escalated++;
-    // Tier-2, Tier-1'in yanlışını düzelttiyse say
+    // Count the cases where Tier-2 corrected a Tier-1 mistake
     const cPred = resolveSpecies(t1, cands);
     if (t2 && !binomialMatch(cPred, r.truth) && binomialMatch(dPred, r.truth)) tier2Rescued++;
   }
@@ -298,10 +304,17 @@ function report(records) {
   const pct = (x) => `${((x / n) * 100).toFixed(1)}%`;
 
   const lines = [];
-  lines.push(`# Plantie — Ölçüm Sonuçları\n`);
-  lines.push(`Veri seti: ${n} görsel, GBIF CC0, uzman-doğrulamalı tür adları.`);
-  lines.push(`Koşu: ${new Date().toISOString()}\n`);
-  lines.push(`| Yol | top-1 (binomial) | top-1 (cins) | top-3 | p50 gecikme | p95 gecikme | maliyet/tanımlama |`);
+  lines.push(`# Plantie — Measurement Results\n`);
+  lines.push(`Dataset: ${n} images, GBIF CC0, expert-verified species names.`);
+  // A --replay render is NOT a new measurement: the API calls happened on
+  // the original run. Saying so keeps the timestamp from implying fresh data.
+  lines.push(
+    REPLAY
+      ? `Report rendered: ${new Date().toISOString()} (--replay over cached raw responses, no new API calls)`
+      : `Run: ${new Date().toISOString()}`,
+  );
+  lines.push('');
+  lines.push(`| Path | top-1 (binomial) | top-1 (genus) | top-3 | p50 latency | p95 latency | cost/identification |`);
   lines.push(`|---|---|---|---|---|---|---|`);
 
   for (const key of Object.keys(paths)) {
@@ -316,15 +329,15 @@ function report(records) {
     );
   }
 
-  lines.push(`\n## Kademeleme davranışı\n`);
-  lines.push(`- Tier-2'ye yükselen tanımlama: **${escalated}/${n}** (${pct(escalated)})`);
-  lines.push(`- Tier-2'nin Tier-1'in hatasını düzelttiği vaka: **${tier2Rescued}**`);
-  lines.push(`- Tier-1 JSON parse hatası: **${tier1ParseFail}/${n}**`);
+  lines.push(`\n## Cascade behaviour\n`);
+  lines.push(`- Identifications escalated to Tier-2: **${escalated}/${n}** (${pct(escalated)})`);
+  lines.push(`- Cases where Tier-2 corrected Tier-1: **${tier2Rescued}**`);
+  lines.push(`- Tier-1 JSON parse failures: **${tier1ParseFail}/${n}**`);
 
   const reasons = {};
   for (const r of records) if (r.escalationReason) reasons[r.escalationReason] = (reasons[r.escalationReason] ?? 0) + 1;
   if (Object.keys(reasons).length) {
-    lines.push(`\nTetikleyici dağılımı:\n`);
+    lines.push(`\nTrigger distribution:\n`);
     for (const [k, v] of Object.entries(reasons).sort((a, b) => b[1] - a[1])) lines.push(`- \`${k}\`: ${v}`);
   }
 
@@ -351,7 +364,7 @@ function report(records) {
   ].join('\n');
   writeFile(path.join(DIR, 'results.csv'), csvOut + '\n', 'utf8');
 
-  console.log('→ eval/results.md ve eval/results.csv yazıldı.');
+  console.log('→ wrote eval/results.md and eval/results.csv');
 }
 
 main().catch((err) => {

@@ -1,5 +1,6 @@
 # dependencies
 node_modules/
+eval/node_modules/
 
 # expo
 .expo/
@@ -19,9 +20,16 @@ expo-env.d.ts
 .env
 .env.local
 
-# eval — dataset is fetched, not committed
+# eval — the dataset is fetched by `npm run fetch`, not committed.
+# dataset.csv (source URL, licence, photographer) IS committed so the set
+# stays reproducible; the images themselves are not.
 eval/photos/
-eval/node_modules/
+eval/dataset.full.csv
+
+# eval — generated run artefacts. The curated results-*.md reports are
+# committed; raw dumps and console logs are not.
+eval/results-raw.json
+eval/*.log
 
 # metro
 .metro-health-check*
@@ -38,7 +46,3 @@ Thumbs.db
 # editor
 .vscode/
 .idea/
-
-# eval — üretilen çıktılar ve indirilen görseller
-eval/results-raw.json
-eval/dataset.full.csv

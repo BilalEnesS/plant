@@ -1,0 +1,11 @@
+# Normalise line endings in the repository regardless of the OS a
+# contributor is on — without this, a Windows checkout can commit CRLF and
+# make an otherwise unchanged file look fully rewritten in a diff.
+* text=auto eol=lf
+
+# Binary assets — never touched by line-ending conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ttf binary
+*.otf binary

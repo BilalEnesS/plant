@@ -1,12 +1,12 @@
 /**
- * "AI-first yaklaşım gerçekten daha mı kötü?" sorusunu dürüstçe ölçer.
+ * Measures, honestly, whether the "AI-first approach" is really worse.
  *
- * Ana koşudaki "yalnız VLM" yolu en ucuz modeli (Flash) ve düz bir prompt'u
- * kullanıyordu — bu, AI-first mimarinin ADİL bir testi değil. Burada model
- * gücünü ve prompt kalitesini ayrı ayrı değiştirip hangisinin ne kadar
- * katkı yaptığını ölçüyoruz.
+ * The main run's "VLM only" path used the cheapest model (Flash) with a plain
+ * prompt — which is not a FAIR test of an AI-first architecture. Here model
+ * strength and prompt quality are varied independently, to see how much each
+ * one actually contributes.
  *
- * Pl@ntNet kotası HARCANMAZ — yalnızca LLM çağrıları yapılır.
+ * Pl@ntNet quota is NOT spent — only LLM calls are made.
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -26,10 +26,10 @@ Reply with a single JSON object:
 Do not invent a species to seem helpful. Reply with only that JSON object.`;
 
 /**
- * Yapılandırılmış botanik akıl yürütme: modeli türü tahmin etmeden ÖNCE
- * ayırt edici morfolojik özellikleri saymaya zorlar. İnce taneli görsel
- * sınıflandırmada bu tür "önce gözlemle, sonra karar ver" yapısı genellikle
- * doğruluğu artırır.
+ * Structured botanical reasoning: forces the model to enumerate the
+ * distinguishing morphological characters BEFORE naming a species. In
+ * fine-grained visual classification this "observe first, decide second"
+ * shape usually improves accuracy.
  */
 const REASONING_PROMPT = `You are a botanist identifying a plant from a photograph.
 
@@ -54,10 +54,10 @@ Reply with a single JSON object with exactly these fields:
 }`;
 
 const VARIANTS = [
-  { key: 'V1', label: 'Flash + düz prompt', model: 'gemini-2.5-flash', prompt: SIMPLE_PROMPT, maxTokens: 400 },
-  { key: 'V2', label: 'Sonnet 4.5 + düz prompt', model: 'claude-sonnet-4.5', prompt: SIMPLE_PROMPT, maxTokens: 400 },
-  { key: 'V3', label: 'Sonnet 4.5 + akıl yürütme', model: 'claude-sonnet-4.5', prompt: REASONING_PROMPT, maxTokens: 1200 },
-  { key: 'V4', label: 'Flash + akıl yürütme', model: 'gemini-2.5-flash', prompt: REASONING_PROMPT, maxTokens: 1200 },
+  { key: 'V1', label: 'Flash + plain prompt', model: 'gemini-2.5-flash', prompt: SIMPLE_PROMPT, maxTokens: 400 },
+  { key: 'V2', label: 'Sonnet 4.5 + plain prompt', model: 'claude-sonnet-4.5', prompt: SIMPLE_PROMPT, maxTokens: 400 },
+  { key: 'V3', label: 'Sonnet 4.5 + reasoning', model: 'claude-sonnet-4.5', prompt: REASONING_PROMPT, maxTokens: 1200 },
+  { key: 'V4', label: 'Flash + reasoning', model: 'gemini-2.5-flash', prompt: REASONING_PROMPT, maxTokens: 1200 },
 ];
 
 async function main() {
@@ -75,7 +75,7 @@ async function main() {
   const results = {};
   for (const v of VARIANTS) results[v.key] = { ...v, preds: [], top3: [], lat: [], cost: [], nulls: 0 };
 
-  console.log(`${rows.length} görsel × ${VARIANTS.length} varyant\n`);
+  console.log(`${rows.length} images × ${VARIANTS.length} variants\n`);
 
   for (const [i, row] of rows.entries()) {
     const b64 = await vlmImageBase64(path.join(DIR, 'photos', row.filename));
@@ -110,8 +110,8 @@ async function main() {
   const pct = (x) => `${((x / n) * 100).toFixed(1)}%`;
 
   const lines = [];
-  lines.push('# Yalnız-VLM varyantları — AI-first yaklaşım ne kadar iyi olabilir?\n');
-  lines.push(`Veri seti: ${n} görsel (ana koşuyla aynı). Pl@ntNet kullanılmadı.\n`);
+  lines.push('# VLM-only variants — how good can an AI-first approach get?\n');
+  lines.push(`Dataset: ${n} images (same as the main run). Pl@ntNet was not used.\n`);
   lines.push('| Varyant | top-1 | cins | top-3 | "bilmiyorum" | p50 | maliyet |');
   lines.push('|---|---|---|---|---|---|---|');
 
@@ -130,7 +130,7 @@ async function main() {
   const md = lines.join('\n') + '\n';
   console.log(md);
   await writeFile(path.join(DIR, 'results-vlm-variants.md'), md, 'utf8');
-  console.log('→ eval/results-vlm-variants.md yazıldı.');
+  console.log('→ wrote eval/results-vlm-variants.md');
 }
 
 main().catch((e) => {

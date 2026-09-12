@@ -1,7 +1,7 @@
 /**
- * Eval'in API istemcileri. İstek şekilleri uygulamadakiyle AYNI tutulmalı
+ * The eval's API clients. Request shapes must stay IDENTICAL to the app's,
  * (src/api/plantnet/client.ts ve src/api/eachlabs/llm.ts) — aksi halde
- * ölçüm sahaya çıkan davranışı temsil etmez.
+ * otherwise the measurement does not represent the shipped behaviour.
  */
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +9,7 @@ import sharp from 'sharp';
 
 const ROOT = path.join(import.meta.dirname, '..', '..');
 
-/** .env'i elle oku — eval uygulamadan bağımsız, expo config'e bağlı değil. */
+/** Read .env by hand — the eval is independent of the app and its expo config. */
 export async function loadEnv() {
   const raw = await readFile(path.join(ROOT, '.env'), 'utf8');
   const env = {};
@@ -18,16 +18,16 @@ export async function loadEnv() {
     if (m) env[m[1]] = m[2].trim();
   }
   if (!env.PLANTNET_API_KEY || !env.EACHLABS_API_KEY) {
-    throw new Error('.env içinde PLANTNET_API_KEY ve EACHLABS_API_KEY olmalı');
+    throw new Error('.env must define PLANTNET_API_KEY and EACHLABS_API_KEY');
   }
   return env;
 }
 
-// Uygulamayla aynı modeller (src/api/eachlabs/llm.ts).
+// The same models as the app (src/api/eachlabs/llm.ts).
 export const TIER1_MODEL = 'gemini-2.5-flash';
 export const TIER2_MODEL = 'gemini-3-flash-preview';
 
-/** Uygulamanın VLM'e gönderdiğiyle aynı: 768px uzun kenar, JPEG q70, base64. */
+/** Identical to what the app sends the VLM: 768px long edge, JPEG q70, base64. */
 export async function vlmImageBase64(filePath) {
   const buf = await sharp(filePath)
     .resize({ width: 768, height: 768, fit: 'inside', withoutEnlargement: true })
@@ -108,7 +108,7 @@ async function chatCompletion(env, { model, prompt, imageBase64, maxTokens = 900
 
 export { chatCompletion };
 
-/** Modelin çit/gevezelik eklemesine karşı savunmacı parse — uygulamayla aynı yaklaşım. */
+/** Defensive parse against fences/chatter from the model — same approach as the app. */
 export function parseJsonLoose(raw) {
   try {
     const start = raw.indexOf('{');

@@ -1,6 +1,6 @@
 import { chat, type ChatTurn } from '@/api/eachlabs/llm';
 import { EachlabsHttpError } from '@/api/eachlabs/http';
-import { buildChatSystemPrompt, type ChatGrounding } from '@/services/prompt';
+import { buildChatSystemPrompt, sanitizeUserMessage, type ChatGrounding } from '@/services/prompt';
 import { chatMessages, type ChatMessage } from '@/db/chat';
 import { HttpNetworkError, HttpTimeoutError } from '@/lib/http';
 import type { AppError } from '@/errors/AppError';
@@ -41,7 +41,12 @@ function groundingFor(discovery: Discovery): ChatGrounding {
  * the model instead of making the user retype — and never double-inserts.
  */
 export async function appendUserMessage(discoveryId: string, text: string): Promise<ChatMessage> {
-  return chatMessages.append(discoveryId, 'user', text.trim().slice(0, MAX_MESSAGE_LENGTH));
+  // sanitizeUserMessage, not a bare slice: it removes the structural
+  // characters a message would need to fake a new prompt section or a new
+  // turn (line breaks, delimiter lookalikes, zero-width/bidi tricks) and
+  // applies the length cap. The WORDING is untouched — asking an odd
+  // question is allowed, and declining it is the model's job, not a filter's.
+  return chatMessages.append(discoveryId, 'user', sanitizeUserMessage(text));
 }
 
 /**
@@ -55,9 +60,22 @@ export async function requestReply(args: {
   locale: Locale;
   signal?: AbortSignal;
 }): Promise<ChatOutcome> {
+  /**
+   * Replayed history is sanitised too, both roles.
+   *
+   * A stored thread is the one part of this prompt that GROWS, and it is
+   * replayed on every later turn — so anything structural that once got into
+   * a row keeps firing for the life of the conversation instead of once.
+   * Two sources: rows written before this sanitising existed, and assistant
+   * turns, which are model output and were never filtered at all.
+   *
+   * Collapsing line breaks costs nothing here: the system prompt already
+   * requires plain conversational answers with no markdown or lists.
+   */
   const turns: ChatTurn[] = args.history
     .slice(-HISTORY_WINDOW)
-    .map((m) => ({ role: m.role, content: m.content }));
+    .map((m) => ({ role: m.role, content: sanitizeUserMessage(m.content) }))
+    .filter((m) => m.content.length > 0);
 
   if (turns.length === 0) {
     return { kind: 'error', error: { kind: 'service' } };

@@ -1,31 +1,0 @@
-36 görsel değerlendiriliyor…
-
-  1/36  kota:406            2/36  kota:405  kademelendi  3/36  kota:404            4/36  kota:403  kademelendi  5/36  kota:402  kademelendi  6/36  kota:401            7/36  kota:400            8/36  kota:399  kademelendi  9/36  kota:398  kademelendi  10/36  kota:397            11/36  kota:396  kademelendi  12/36  kota:395            13/36  kota:394            14/36  kota:393            15/36  kota:?  kademelendi  16/36  kota:391            17/36  kota:390            18/36  kota:389            19/36  kota:388            20/36  kota:387            21/36  kota:386            22/36  kota:385            23/36  kota:384            24/36  kota:383            25/36  kota:382            26/36  kota:381            27/36  kota:380            28/36  kota:379            29/36  kota:378            30/36  kota:377            31/36  kota:376  kademelendi  32/36  kota:375            33/36  kota:374            34/36  kota:373  kademelendi  35/36  kota:372            36/36  kota:371          
-
-# Plantie — Ölçüm Sonuçları
-
-Veri seti: 36 görsel, GBIF CC0, uzman-doğrulamalı tür adları.
-Koşu: 2026-09-10T15:58:55.579Z
-
-| Yol | top-1 (binomial) | top-1 (cins) | top-3 | p50 gecikme | p95 gecikme | maliyet/tanımlama |
-|---|---|---|---|---|---|---|
-| A · yalnız Pl@ntNet | 63.9% | 86.1% | 72.2% | 692ms | 1861ms | $0.00100 |
-| B · yalnız VLM | 22.2% | 41.7% | 27.8% | 1667ms | 2256ms | $0.00059 |
-| C · hibrit (Tier-1) | 52.8% | 66.7% | 72.2% | 3358ms | 5412ms | $0.00208 |
-| D · kademeli (Tier-2 hakemli) | 55.6% | 75.0% | 72.2% | 3635ms | 7468ms | $0.00235 |
-| E · muhafazakâr hibrit | 63.9% | 88.9% | 72.2% | 3358ms | 5412ms | $0.00208 |
-| F · muhafazakâr + çöp-aday kurtarma | 63.9% | 88.9% | 72.2% | 3358ms | 5412ms | $0.00208 |
-
-## Kademeleme davranışı
-
-- Tier-2'ye yükselen tanımlama: **9/36** (25.0%)
-- Tier-2'nin Tier-1'in hatasını düzelttiği vaka: **1**
-- Tier-1 JSON parse hatası: **0/36**
-
-Tetikleyici dağılımı:
-
-- `low-score-but-vlm-confident`: 7
-- `tier1-says-not-a-plant`: 1
-- `no-classifier-candidates`: 1
-
-→ eval/results.md ve eval/results.csv yazıldı.

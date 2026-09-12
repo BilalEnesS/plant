@@ -114,7 +114,7 @@ for (const [filename, truth] of rows) {
 }
 
 const med = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
-console.log(`\n| model | tür isabeti | cins isabeti | medyan gecikme | medyan token | parse hatası |`);
+console.log(`\n| model | species hit | genus hit | median latency | median tokens | parse failures |`);
 console.log(`|---|---|---|---|---|---|`);
 for (const m of MODELS) {
   const s = stats[m];

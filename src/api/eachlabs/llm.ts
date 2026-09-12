@@ -42,9 +42,6 @@ const VLM_MODEL_TIER2 = 'gemini-3-flash-preview';
 const TIER1_MAX_TOKENS = 900;
 const TIER2_MAX_TOKENS = 1200;
 
-/** For the README's measurement section — counts how many identifications escalated. */
-export const routerStats = { tier1Calls: 0, tier2Calls: 0 };
-
 interface ChatCompletionResponse {
   choices: Array<{ message: { content: string } }>;
 }
@@ -89,7 +86,7 @@ async function callVlm(
 
   const content = response.choices?.[0]?.message?.content;
   if (!content) {
-    if (__DEV__) console.log(`[vlm:${model}] boş içerik`);
+    if (__DEV__) console.log(`[vlm:${model}] empty content`);
     return null;
   }
 
@@ -104,7 +101,6 @@ async function callVlm(
  * identification; the caller keeps showing the result without care info.
  */
 export async function enrich(args: EnrichArgs): Promise<Enrichment | null> {
-  routerStats.tier1Calls++;
   try {
     return await callVlm(
       VLM_MODEL_TIER1,
@@ -114,7 +110,7 @@ export async function enrich(args: EnrichArgs): Promise<Enrichment | null> {
       args.signal,
     );
   } catch (err) {
-    if (__DEV__) console.log('[enrich] tier1 çağrısı başarısız ->', err);
+    if (__DEV__) console.log('[enrich] tier1 call failed ->', err);
     return null;
   }
 }
@@ -173,7 +169,6 @@ export async function chat(args: ChatArgs): Promise<string> {
  * escalation failure NEVER drops the identification.
  */
 export async function secondOpinion(args: EnrichArgs): Promise<Enrichment | null> {
-  routerStats.tier2Calls++;
   try {
     return await callVlm(
       VLM_MODEL_TIER2,
@@ -183,7 +178,7 @@ export async function secondOpinion(args: EnrichArgs): Promise<Enrichment | null
       args.signal,
     );
   } catch (err) {
-    if (__DEV__) console.log('[secondOpinion] tier2 çağrısı başarısız ->', err);
+    if (__DEV__) console.log('[secondOpinion] tier2 call failed ->', err);
     return null;
   }
 }

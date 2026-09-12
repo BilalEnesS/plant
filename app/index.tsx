@@ -63,7 +63,7 @@ export default function WelcomeScreen() {
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
-          <Image source={require('../assets/icon.png')} style={styles.headerIcon} />
+          <Image source={require('../assets/plantie-icon-v2.png')} style={styles.headerIcon} />
           <Title style={styles.headerTitle}>{tr.appName}</Title>
           <View style={styles.languageToggle}>
             {(['tr', 'en'] as Locale[]).map((code) => (

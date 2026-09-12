@@ -114,8 +114,4 @@ export const stickerQueue = {
     }
     void runQueue();
   },
-
-  stats() {
-    return { ...runtimeStats };
-  },
 };

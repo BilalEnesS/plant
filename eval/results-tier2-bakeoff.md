@@ -37,7 +37,7 @@
 035.jpg  | Goodyera oblongifolia      | ✓ Goodyera oblongifolia    1400ms    21t | ✓ Goodyera oblongifolia    1914ms    23t
 036.jpg  | Ricinus communis           | ✓ Ricinus communis         1471ms    20t | ✓ Ricinus communis         2215ms    22t
 
-| model | tür isabeti | cins isabeti | medyan gecikme | medyan token | parse hatası |
+| model | species hit | genus hit | median latency | median tokens | parse failures |
 |---|---|---|---|---|---|
 | gemini-2.5-flash | 22.2% | 38.9% | 1501ms | 18 | 0/36 |
 | gemini-3-flash-preview | 44.4% | 75.0% | 1914ms | 23 | 0/36 |

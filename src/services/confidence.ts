@@ -48,7 +48,8 @@ export interface ResolvedBand {
  * The upgrade ceiling is 'medium', never 'high': claiming top confidence
  * while Pl@ntNet's own confirmation is weak wouldn't be honest.
  *
- * `eval/lib/hybrid.mjs` mirrors this logic exactly.
+ * `eval/run.mjs` IMPORTS this module directly rather than copying it, so the
+ * measured policy and the shipped policy can never drift apart.
  */
 export function resolveBand(input: ResolveBandInput): ResolvedBand {
   const { score, tier1Agreement, tier2Agreement, tiersAgreeOnSpecies } = input;

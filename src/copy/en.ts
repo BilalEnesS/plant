@@ -85,7 +85,6 @@ export const en: CopyDict = {
   chatPlaceholder: 'Ask a question…',
   chatSendA11y: 'Send',
   chatThinking: 'Thinking…',
-  chatDisclaimer: 'Answers are AI-generated and can be wrong.',
   chatSuggestionWater: 'How often should I water it?',
   chatSuggestionLight: 'How much light does it need?',
   chatSuggestionPets: 'Is it safe for pets?',

@@ -107,6 +107,23 @@ export const discoveries = {
     return rows.map(rowToDiscovery);
   },
 
+  /**
+   * Applies the user's pick from the alternative-candidates list.
+   *
+   * The sticker is reset to 'pending' because it is keyed by species: the one
+   * already generated (or queued) belongs to the species being replaced. The
+   * stored `sticker_traits` are NOT reset — they describe what is visible in
+   * the PHOTO, which has not changed, so they stay the right guidance for
+   * drawing whatever species the record now names.
+   */
+  async setSpecies(id: string, speciesLatin: string, speciesCommon: string | null): Promise<void> {
+    const db = await getDb();
+    await db.runAsync(
+      "UPDATE discoveries SET species_latin = ?, species_common_tr = ?, sticker_uri = NULL, sticker_status = 'pending' WHERE id = ?",
+      [speciesLatin, speciesCommon, id],
+    );
+  },
+
   async setSticker(id: string, relativeFilename: string | null, status: StickerStatus): Promise<void> {
     const db = await getDb();
     await db.runAsync('UPDATE discoveries SET sticker_uri = ?, sticker_status = ? WHERE id = ?', [

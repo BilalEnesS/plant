@@ -1,14 +1,14 @@
 /**
- * GBIF'ten etiketli değerlendirme seti indirir.
+ * Downloads the labelled evaluation set from GBIF.
  *
- * NEDEN GBIF, NEDEN PlantNet-300K DEĞİL:
- * Pl@ntNet'in kendi veri seti üzerinde Pl@ntNet API'sini ölçmek train/test
- * kontaminasyonudur — uzman sınıflandırıcı kendi eğitim dağılımında yapay
- * olarak iyi görünür ve hibrit yolun kazancı bastırılır. GBIF bağımsız,
- * uzman-doğrulamalı (HUMAN_OBSERVATION) ve CC0 lisanslı görsel sağlıyor.
+ * WHY GBIF AND NOT PlantNet-300K:
+ * Measuring the Pl@ntNet API on Pl@ntNet's own dataset is train/test
+ * contamination — the specialist classifier looks artificially good on its
+ * own training distribution, which suppresses whatever the hybrid path adds.
+ * GBIF provides independent, expert-verified (HUMAN_OBSERVATION), CC0 images.
  *
- * Görseller git'e GİRMEZ (.gitignore: eval/photos/). dataset.csv atıf
- * bilgisiyle birlikte commit edilir, böylece set yeniden üretilebilir.
+ * The images are NOT committed (.gitignore: eval/photos/). dataset.csv is,
+ * together with its attribution, so the set stays reproducible.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -16,8 +16,8 @@ import path from 'node:path';
 import sharp from 'sharp';
 
 const TARGET_IMAGES = 36;
-const MAX_PER_SPECIES = 2; // tür çeşitliliğini zorla — tek türden yığılma olmasın
-const LONG_EDGE = 1280; // uygulamanın prepare() adımıyla AYNI — maliyet/gecikme sadık olsun
+const MAX_PER_SPECIES = 2; // force species diversity — no pile-up on one species
+const LONG_EDGE = 1280; // IDENTICAL to the app's prepare() step, so cost/latency stay faithful
 
 const PHOTOS_DIR = path.join(import.meta.dirname, 'photos');
 const MULTIMEDIA_EXT = 'http://rs.gbif.org/terms/1.0/Multimedia';
@@ -68,7 +68,7 @@ async function main() {
       const species = r.species;
       const url = mediaUrlOf(r);
       if (!species || !url) continue;
-      // Yalnızca doğrudan görsel dosyaları — HTML sayfa linklerini ele
+      // Direct image files only — skip links to HTML pages
       if (!/\.(jpe?g|png)(\?|$)/i.test(url)) continue;
 
       const seen = perSpecies.get(species) ?? 0;
@@ -84,7 +84,7 @@ async function main() {
     }
   }
 
-  console.log(`GBIF: ${chosen.length} görsel, ${perSpecies.size} farklı tür seçildi. İndiriliyor…`);
+  console.log(`GBIF: selected ${chosen.length} images across ${perSpecies.size} species. Downloading…`);
 
   const rows = [['filename', 'correct_latin', 'source_url', 'license', 'creator']];
   let ok = 0;
@@ -103,7 +103,7 @@ async function main() {
       const res = await fetch(item.url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const buf = Buffer.from(await res.arrayBuffer());
-      // Uygulamanın prepare() adımını taklit et: uzun kenar 1280, JPEG q80.
+      // Mirror the app's prepare() step: 1280px long edge, JPEG q80.
       await sharp(buf)
         .resize({ width: LONG_EDGE, height: LONG_EDGE, fit: 'inside', withoutEnlargement: true })
         .jpeg({ quality: 80 })
@@ -112,7 +112,7 @@ async function main() {
       ok++;
       process.stdout.write(`\r  ${ok}/${chosen.length}`);
     } catch (err) {
-      console.warn(`\n  atlandı (${item.species}): ${err.message}`);
+      console.warn(`\n  skipped (${item.species}): ${err.message}`);
     }
   }
 
@@ -121,8 +121,8 @@ async function main() {
     .join('\n');
   await writeFile(path.join(import.meta.dirname, 'dataset.csv'), csv + '\n', 'utf8');
 
-  console.log(`\n\nHazır: ${ok} görsel, ${perSpecies.size} tür → eval/photos/ + eval/dataset.csv`);
-  console.log('Tüm görseller CC0-1.0; atıf bilgisi dataset.csv içinde.');
+  console.log(`\n\nDone: ${ok} images, ${perSpecies.size} species → eval/photos/ + eval/dataset.csv`);
+  console.log('All images are CC0-1.0; attribution is in dataset.csv.');
 }
 
 main().catch((err) => {

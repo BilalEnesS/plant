@@ -8,11 +8,12 @@ const config: ExpoConfig = {
   version: '1.0.0',
   orientation: 'portrait',
   userInterfaceStyle: 'light',
-  // Filename deliberately 'plantie-icon' — Expo Go caches the icon by URL
-  // and kept serving the old placeholder at the 'icon.png' path (verified
-  // on-device 2026-09-09). The new name creates a URL the cache has never
-  // seen, fixing it for good.
-  icon: './assets/plantie-icon.png',
+  // Filename bumped to '-v2' for the same reason 'plantie-icon' exists at
+  // all — Expo Go caches the icon by URL, so fixing the artwork (it was
+  // off-center in its own canvas: 102px left margin vs 18px right, verified
+  // 2026-09-11) under the OLD filename would still serve the stale cached
+  // image. A new URL is the only reliable way to bust it.
+  icon: './assets/plantie-icon-v2.png',
   ios: {
     supportsTablet: false,
     bundleIdentifier: 'com.plantie.app',

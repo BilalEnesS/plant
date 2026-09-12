@@ -73,7 +73,6 @@ export interface CopyDict {
   chatPlaceholder: string;
   chatSendA11y: string;
   chatThinking: string;
-  chatDisclaimer: string;
   chatSuggestionWater: string;
   chatSuggestionLight: string;
   chatSuggestionPets: string;
@@ -174,7 +173,6 @@ export const tr: CopyDict = {
   chatPlaceholder: 'Bir şey sor…',
   chatSendA11y: 'Gönder',
   chatThinking: 'Yanıt yazılıyor…',
-  chatDisclaimer: 'Yanıtlar yapay zekâ tarafından üretiliyor, hata yapabilir.',
   chatSuggestionWater: 'Ne sıklıkla sulamalıyım?',
   chatSuggestionLight: 'Ne kadar ışık ister?',
   chatSuggestionPets: 'Evcil hayvanlar için güvenli mi?',

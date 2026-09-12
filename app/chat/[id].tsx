@@ -244,9 +244,6 @@ export default function PlantChatScreen() {
         </View>
 
         <View style={styles.footer}>
-          <Micro color={colors.moss} style={styles.disclaimer}>
-            {tr.chatDisclaimer}
-          </Micro>
           {messages.length > 0 && (
             <Pressable
               accessibilityRole="button"
@@ -396,13 +393,10 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: spacing(3),
     paddingHorizontal: spacing(6),
     paddingVertical: spacing(3),
-  },
-  disclaimer: {
-    flex: 1,
   },
   clearButton: {
     minHeight: 32,

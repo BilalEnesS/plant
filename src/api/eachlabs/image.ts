@@ -39,11 +39,11 @@ export async function generateSticker(args: GenerateStickerArgs): Promise<string
   );
 
   if (created.status !== 'success' || !created.predictionID) {
-    throw new StickerGenerationError('prediction oluşturulamadı');
+    throw new StickerGenerationError('prediction could not be created');
   }
 
   while (Date.now() < deadline) {
-    if (args.signal?.aborted) throw new StickerGenerationError('iptal edildi');
+    if (args.signal?.aborted) throw new StickerGenerationError('cancelled');
     await new Promise((resolve) => setTimeout(resolve, 3_000));
 
     const poll = await eachlabsGet<PollPredictionResponse>(`/prediction/${created.predictionID}`, {
@@ -52,7 +52,7 @@ export async function generateSticker(args: GenerateStickerArgs): Promise<string
 
     if (poll.status === 'success') {
       const url = stickerModel.extractUrl(poll.output);
-      if (!url) throw new StickerGenerationError('output URL çıkarılamadı');
+      if (!url) throw new StickerGenerationError('could not extract an output URL');
       return url;
     }
     if (poll.status === 'failed' || poll.status === 'cancelled') {

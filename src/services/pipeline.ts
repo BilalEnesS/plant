@@ -8,6 +8,7 @@ import {
 } from '@/api/plantnet/client';
 import { secondOpinion, enrich } from '@/api/eachlabs/llm';
 import { bandForScore, resolveBand } from '@/services/confidence';
+import { escalationReason } from '@/services/escalation';
 import { HttpNetworkError, HttpTimeoutError } from '@/lib/http';
 import { fs } from '@/lib/fs';
 import { generateId } from '@/lib/id';
@@ -23,55 +24,6 @@ import type {
   PreparedImage,
 } from '@/services/types';
 import type { Locale } from '@/store/useLocaleStore';
-
-/**
- * Decides whether to escalate to Tier 2 (the strong adjudicator model).
- * Every trigger is an OBSERVABLE signal, never the model's self-reported
- * confidence (LLM self-reported confidence is poorly calibrated). Instead it
- * looks for structural disagreement between the two independent sources
- * (the classifier and the VLM) — the architecture's key design point.
- *
- * Returns null when no escalation is needed — Tier 1 alone covers most cases,
- * so cost/latency isn't wasted.
- */
-function escalationReason(
-  tier1: Enrichment | null,
-  topScore: number,
-  hasNoCandidates: boolean,
-): string | null {
-  // D: Tier 1's response couldn't be parsed at all — the stronger model may produce better JSON.
-  if (!tier1) return 'tier1-unparseable';
-
-  // F: If Tier 1 says "not a plant", get a SECOND OPINION instead of rejecting outright.
-  // Measured (eval/results.md, 36 GBIF images): Tier 1 wrongly rejected a real
-  // fern as "not a plant" (1/36 false rejection), Tier 2 had zero (0/36).
-  // A rejection shows the user nothing — the most expensive failure mode,
-  // so a second opinion is worth the cost.
-  if (!tier1.isPlant) return 'tier1-says-not-a-plant';
-
-  // C: Pl@ntNet produced no candidates at all — the VLM is the only support, don't leave it unchecked.
-  // (The ONLY case where the species name can come from the VLM; see the note below.)
-  if (hasNoCandidates) return 'no-classifier-candidates';
-
-  // B: Pl@ntNet was reasonably confident but the VLM found low visual agreement — a real conflict.
-  // This now only affects the BAND, never the species name.
-  if (topScore >= 0.25 && tier1.visualAgreement === 'low') return 'score-vs-agreement-conflict';
-
-  // E: Pl@ntNet is in the low band but the VLM strongly confirms — a band-upgrade candidate.
-  // Tier 1's confirmation alone isn't enough (it saw the candidate list, so
-  // "high" carries a sycophancy risk) — a second, independent confirmation is required.
-  if (bandForScore(topScore) === 'low' && tier1.visualAgreement === 'high') {
-    return 'low-score-but-vlm-confident';
-  }
-
-  // NOTE — removed trigger: `bestMatchIndex === -1` ("VLM rejected all
-  // candidates") used to trigger escalation and let the VLM's own guess
-  // become the species name. Measurement showed this was HARMFUL: the VLM
-  // alone is only ~22% accurate at species level vs. Pl@ntNet's ~64%.
-  // Letting it override broke 3 correct calls and fixed only 1 (net −2).
-  // The species name now ALWAYS comes from Pl@ntNet when candidates exist.
-  return null;
-}
 
 /**
  * Steps 9-10: moves the photo into the permanent photos/ dir, writes the row
@@ -223,16 +175,38 @@ export async function identify(input: IdentifyInput): Promise<IdentifyOutcome> {
   // a cactus) or absent entirely. In this case it's worth also asking the VLM
   // for its own independent guess rather than just picking among the (if any)
   // 3 candidates — a general VLM's broad training data can help where the
-  // specialist classifier is weak. This is NOT done in the normal low band
-  // (5-25%) — enrichment is skipped there and the second-photo loop runs
-  // instead (a deliberate cost saving).
+  // specialist classifier is weak. In the normal low band (5-25%) the VLM
+  // still runs, but it is NOT allowed to name its own species there: the
+  // classifier's candidates are still usable, so the VLM's job is confirming
+  // them, not replacing them.
   const veryLowScore = hasNoCandidates || top.score < 0.05;
   const allowOwnGuess = topBand === 'low' && attempt === 1 && veryLowScore;
 
-  if (topBand === 'low' && attempt === 1 && !veryLowScore) {
-    if (__DEV__) console.log('[pipeline] needs-second-photo: top score', top.score, '< 0.25 (>=0.05)');
-    return { kind: 'needs-second-photo', session: { images: prepared, attempt: 1 } };
-  }
+  /**
+   * NOTE — removed short-circuit: the low band (5-25%) on attempt 1 used to
+   * return `needs-second-photo` RIGHT HERE, before the VLM was ever called,
+   * as "a deliberate cost saving." It was neither a saving nor correct.
+   *
+   * `resolveBand` can lift a low-band score to 'medium' when both tiers
+   * independently confirm the same species — and that is by far the most
+   * common escalation trigger in the eval (`low-score-but-vlm-confident`,
+   * 7 of 9 escalations). Returning before the VLM ran made that upgrade
+   * UNREACHABLE on attempt 1, so every 5-25% scan demanded a second photo
+   * no matter how clearly the plant was identifiable.
+   *
+   * Observed on-device (2026-09-12, Lilium candidum): attempt 1 scored
+   * 0.20358 → forced second photo → attempt 2 scored 0.205 (statistically
+   * the same picture) → tier 1 'high', tier 2 'high', same species → band
+   * upgraded to 'medium' and the result shown. The second photo contributed
+   * nothing; the VLM confirmation decided it, and that could have happened
+   * on the first.
+   *
+   * The cost argument was also backwards: the old path spent TWO Pl@ntNet
+   * calls, both VLM tiers, three image prepares and one extra user photo to
+   * avoid one VLM call. The band gate at the bottom of this function
+   * already asks for a second photo when the band really is low after the
+   * VLM has had its say — which is the gate the eval measures.
+   */
 
   if (__DEV__) console.log('[pipeline] vlmBase64 length =', prepared[0].vlmBase64.length, 'allowOwnGuess =', allowOwnGuess);
 
@@ -256,7 +230,7 @@ export async function identify(input: IdentifyInput): Promise<IdentifyOutcome> {
   let enrichment = tier1;
   let tier2Agreement: Enrichment['visualAgreement'] | null = null;
   let tiersAgreeOnSpecies = false;
-  const escalation = escalationReason(tier1, top.score, hasNoCandidates);
+  const escalation = escalationReason(tier1, topBand, hasNoCandidates);
 
   if (escalation) {
     if (__DEV__) console.log('[pipeline] tier2 escalation ->', escalation);
